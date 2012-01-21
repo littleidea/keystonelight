@@ -24,6 +24,10 @@ class IdentityTests(object):
     user_ref, tenant_ref, metadata_ref = self.identity_api.authenticate(
         user_id=self.user_foo['id'],
         password=self.user_foo['password'])
+
+    #passwords are filtered out of the response
+    self.user_foo.pop('password', None)
+
     self.assertDictEquals(user_ref, self.user_foo)
     self.assert_(tenant_ref is None)
     self.assert_(not metadata_ref)
@@ -33,6 +37,10 @@ class IdentityTests(object):
         user_id=self.user_foo['id'],
         tenant_id=self.tenant_bar['id'],
         password=self.user_foo['password'])
+
+    #passwords are filtered out of the response
+    self.user_foo.pop('password', None)
+
     self.assertDictEquals(user_ref, self.user_foo)
     self.assertDictEquals(tenant_ref, self.tenant_bar)
     self.assertDictEquals(metadata_ref, self.metadata_foobar)
@@ -63,6 +71,9 @@ class IdentityTests(object):
 
   def test_get_user(self):
     user_ref = self.identity_api.get_user(user_id=self.user_foo['id'])
+
+    #passwords are filtered out of the response
+    self.user_foo.pop('password', None)
     self.assertDictEquals(user_ref, self.user_foo)
 
   def test_get_metadata_bad_user(self):

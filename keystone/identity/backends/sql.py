@@ -29,7 +29,6 @@ class User(sql.ModelBase, sql.DictBase):
         extra_copy = self.extra.copy()
         extra_copy['id'] = self.id
         extra_copy['name'] = self.name
-        extra_copy.pop('password', None)
         return extra_copy
 
 
@@ -99,18 +98,14 @@ class Identity(sql.Base, identity.Driver):
         in the list of tenants on the user.
 
         """
-
-        session = self.get_session()
-        # NOTE(termie): this is a sql object, not a dict as usual for *_ref
-        user_ref = session.query(User).filter_by(id=user_id).first()
-        if not user_ref:
-            return
-
+        user_ref = self._get_user(user_id)
         tenant_ref = None
         metadata_ref = None
         password = utils.hash_password(user_id, password)
-        if not user_ref or user_ref.extra.get('password') != password:
+        if not user_ref or user_ref['password'] != password:
             raise AssertionError('Invalid user / password')
+
+        user_ref = self._filter_user_password(user_ref)
 
         tenants = self.get_tenants_for_user(user_id)
         if tenant_id and tenant_id not in tenants:
@@ -121,35 +116,44 @@ class Identity(sql.Base, identity.Driver):
             metadata_ref = self.get_metadata(user_id, tenant_id)
         else:
             metadata_ref = {}
-        return (user_ref, tenant_ref, metadata_ref)
+        return user_ref, tenant_ref, metadata_ref
+
+    def get_something(self, type, key, value):
+        session = self.get_session()
+
+        if key == 'name':
+            ref = session.query(type).filter_by(name=value).first()
+        elif key == 'id':
+            ref = session.query(type).filter_by(id=value).first()
+
+        if not ref:
+            return
+        return ref.to_dict()
 
     def get_tenant(self, tenant_id):
-        session = self.get_session()
-        tenant_ref = session.query(Tenant).filter_by(id=tenant_id).first()
-        if not tenant_ref:
-            return
-        return tenant_ref.to_dict()
+        return self.get_something(Tenant, 'id', tenant_id)
 
     def get_tenant_by_name(self, tenant_name):
-        session = self.get_session()
-        tenant_ref = session.query(Tenant).filter_by(name=tenant_name).first()
-        if not tenant_ref:
-            return
-        return tenant_ref.to_dict()
+        return self.get_something(Tenant, 'name', tenant_name)
+
+    def _filter_user_password(self, user_ref):
+        if not user_ref:
+            return user_ref
+        user_ref.pop('password', '')
+        user_ref.pop('tenants', '')
+        return user_ref
+
+    def _get_user(self, user_id):
+        return self.get_something(User, 'id', user_id)
 
     def get_user(self, user_id):
-        session = self.get_session()
-        user_ref = session.query(User).filter_by(id=user_id).first()
-        if not user_ref:
-            return
-        return user_ref.to_dict()
+        return self._filter_user_password(self._get_user(user_id))
+
+    def _get_user_by_name(self, user_name):
+        return self.get_something(User, 'name', user_name)
 
     def get_user_by_name(self, user_name):
-        session = self.get_session()
-        user_ref = session.query(User).filter_by(name=user_name).first()
-        if not user_ref:
-            return
-        return user_ref.to_dict()
+        return self._filter_user_password(self._get_user_by_name(user_name))
 
     def get_metadata(self, user_id, tenant_id):
         session = self.get_session()
